@@ -1,0 +1,191 @@
+:root {
+  --light: #f0d9b5;
+  --dark: #b58863;
+  --sel: rgba(20, 85, 30, 0.5);
+  --lastmove: rgba(155, 199, 0, 0.41);
+  --dest: rgba(20, 85, 30, 0.3);
+  --check: radial-gradient(ellipse at center, rgba(255,0,0,0.9) 0%, rgba(231,0,0,0.8) 25%, rgba(169,0,0,0) 89%);
+  --bg: #161512;
+  --panel: #262421;
+  --text: #bababa;
+  --accent: #629924;
+  --fail: #d64f4f;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  overscroll-behavior: none;
+}
+
+#app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+
+h1#title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 6px 0 0;
+  text-align: center;
+  color: #dedede;
+}
+
+.status {
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 600;
+  min-height: 1.5em;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  transition: background 0.15s, color 0.15s;
+}
+.status.fail { color: #fff; background: var(--fail); }
+.status.ok   { color: #fff; background: var(--accent); }
+
+#board-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.board {
+  width: min(92vw, 536px);
+  aspect-ratio: 1 / 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  border-radius: 4px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+}
+.board.shake { animation: shake 0.34s; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.sq {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.sq.light { background: var(--light); }
+.sq.dark  { background: var(--dark); }
+.sq.sel::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--sel);
+}
+.sq.lastmove::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--lastmove);
+}
+.sq.bad::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: rgba(214, 79, 79, 0.65);
+}
+
+.sq img.piece {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  -webkit-user-drag: none;
+}
+
+/* legal-move hints */
+.sq.dest::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 30%; height: 30%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--dest);
+  z-index: 1;
+}
+.sq.dest.occupied::after {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: transparent;
+  border: 7px solid var(--dest);
+}
+
+/* coordinates */
+.coord {
+  position: absolute;
+  font-size: clamp(8px, 2vw, 11px);
+  font-weight: 700;
+  z-index: 3;
+  pointer-events: none;
+}
+.coord.file { bottom: 1px; right: 3px; }
+.coord.rank { top: 1px; right: 3px; }
+.coord.on-light { color: var(--dark); }
+.coord.on-dark  { color: var(--light); }
+
+/* drag ghost */
+#ghost {
+  position: fixed;
+  width: 64px; height: 64px;
+  z-index: 50;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  display: none;
+}
+
+#controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+#controls button {
+  flex: 1;
+  max-width: 200px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #3a3936;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#controls button:active { background: #4a4945; }
+#controls button#newBtn { background: var(--accent); }
+#controls button#newBtn:active { background: #4f7d1d; }
+
+.moves {
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  min-height: 1.6em;
+  word-spacing: 2px;
+  color: #cfcfcf;
+}
+.moves .mv { display: inline-block; margin-right: 6px; }
+.moves .num { color: #888; margin-right: 2px; }
