@@ -23,6 +23,44 @@ function buildTree(openings) {
 const TREE = buildTree(OPENINGS);
 
 // ---------------------------------------------------------------------------
+// Balanced line selection (shuffle bag): every complete line is played once
+// per cycle before any repeats, order within a cycle is shuffled, and the same
+// line never lands twice in a row across cycle boundaries.
+// ---------------------------------------------------------------------------
+function enumerateLines(root) {
+  const lines = [];
+  (function dfs(n, path) {
+    if (n.children.length === 0) { if (path.length) lines.push(path); return; }
+    for (const c of n.children) dfs(c, path.concat(c.san));
+  })(root, []);
+  return lines;
+}
+
+const ALL_LINES = enumerateLines(TREE);   // each is a full SAN sequence
+let bag = [];
+let lastKey = null;
+let targetLine = null;
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function nextTargetLine() {
+  if (!ALL_LINES.length) return null;
+  if (bag.length === 0) {
+    bag = shuffle(ALL_LINES.slice());
+    if (ALL_LINES.length > 1 && bag[0].join(' ') === lastKey) bag.push(bag.shift());
+  }
+  const line = bag.shift();
+  lastKey = line.join(' ');
+  return line;
+}
+
+// ---------------------------------------------------------------------------
 // DOM + state
 // ---------------------------------------------------------------------------
 const boardEl = document.getElementById('board');
@@ -159,7 +197,14 @@ function attemptUserMove(from, to) {
 
 function botMove() {
   const opts = node.children;
-  const choice = opts[Math.floor(Math.random() * opts.length)];
+  // follow the pre-selected balanced target line when possible…
+  let choice = null;
+  if (targetLine) {
+    const wantSan = targetLine[sanList.length];
+    choice = opts.find((c) => norm(c.san) === norm(wantSan)) || null;
+  }
+  // …otherwise (e.g. user chose a different valid White branch) fall back to random
+  if (!choice) choice = opts[Math.floor(Math.random() * opts.length)];
   // find the matching legal move and play it
   const verbose = game.moves({ verbose: true });
   const m = verbose.find((mv) => norm(mv.san) === norm(choice.san));
@@ -200,6 +245,7 @@ function newLine() {
   sanList = [];
   selected = null;
   locked = false;
+  targetLine = nextTargetLine();
   render(null);
   setStatus('Your move — play White.');
 }
@@ -306,6 +352,8 @@ window.__trainer = {
   get status() { return statusEl.textContent; },
   get locked() { return locked; },
   get history() { return sanList.slice(); },
+  get target() { return targetLine ? targetLine.slice() : null; },
+  get lineCount() { return ALL_LINES.length; },
   userMove(from, to) { attemptUserMove(from, to); },
   newLine,
 };
