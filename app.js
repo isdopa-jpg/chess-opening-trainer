@@ -5,16 +5,88 @@ import { Chess } from 'https://cdn.jsdelivr.net/npm/chess.js@1/+esm';
 // ---------------------------------------------------------------------------
 const norm = (san) => san.replace(/[+#!?]/g, '');
 
+function insertVariation(root, variation) {
+  let node = root;
+  for (const san of variation) {
+    let child = node.children.find((c) => norm(c.san) === norm(san));
+    if (!child) { child = { san, children: [] }; node.children.push(child); }
+    node = child;
+  }
+}
+
+function mergeChildren(target, source) {
+  for (const s of source) {
+    let t = target.find((c) => norm(c.san) === norm(s.san));
+    if (!t) { t = { san: s.san, children: [] }; target.push(t); }
+    mergeChildren(t.children, s.children);
+  }
+}
+
+// --- PGN (with nested variations) -> tree -----------------------------------
+let pgnParseErrors = [];
+
+function tokenizePgn(text) {
+  const tokens = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '{') { const e = text.indexOf('}', i); i = e === -1 ? text.length : e + 1; continue; }
+    if (ch === ';') { const e = text.indexOf('\n', i); i = e === -1 ? text.length : e + 1; continue; }
+    if (ch === '(' || ch === ')') { tokens.push(ch); i++; continue; }
+    if (/\s/.test(ch)) { i++; continue; }
+    let j = i;
+    while (j < text.length && !/[\s(){};]/.test(text[j])) j++;
+    tokens.push(text.slice(i, j));
+    i = j;
+  }
+  return tokens;
+}
+
+const PGN_SKIP = /^(\*|1-0|0-1|1\/2-1\/2|\d+\.+|\$\d+)$/;
+
+// A variation "( … )" is an alternative to the move that just preceded it, so
+// it branches from the position *before* that move. We track each node's
+// fen-before-move and rewind to it when entering a variation.
+function pgnToTree(pgn, name) {
+  const text = pgn.replace(/^\s*\[[^\]]*\]\s*$/gm, ' '); // drop header tag lines
+  const tokens = tokenizePgn(text);
+  const root = { san: null, children: [], parent: null, fenBefore: null };
+  let game = new Chess();
+  let node = root, prev = null;
+  const stack = [];
+  for (const tk of tokens) {
+    if (tk === '(') {
+      stack.push({ game, node, prev });
+      if (prev) { game = new Chess(prev.fenBefore); node = prev.parent; prev = null; }
+      continue;
+    }
+    if (tk === ')') {
+      const f = stack.pop();
+      if (f) { game = f.game; node = f.node; prev = f.prev; }
+      continue;
+    }
+    if (PGN_SKIP.test(tk)) continue;
+    const want = tk.replace(/^\d+\.+/, '');
+    const legal = game.moves({ verbose: true }).find((m) => norm(m.san) === norm(want));
+    if (!legal) { pgnParseErrors.push({ opening: name, token: tk, fen: game.fen() }); continue; }
+    const fenBefore = game.fen();
+    game.move({ from: legal.from, to: legal.to, promotion: legal.promotion || 'q' });
+    let child = node.children.find((c) => norm(c.san) === norm(legal.san));
+    if (!child) { child = { san: legal.san, children: [], parent: node, fenBefore }; node.children.push(child); }
+    prev = child;
+    node = child;
+  }
+  return root;
+}
+
 function buildTree(openings) {
+  pgnParseErrors = [];
   const root = { san: null, children: [] };
   for (const op of openings) {
-    for (const variation of op.variations) {
-      let node = root;
-      for (const san of variation) {
-        let child = node.children.find((c) => norm(c.san) === norm(san));
-        if (!child) { child = { san, children: [] }; node.children.push(child); }
-        node = child;
-      }
+    if (op.pgn) {
+      mergeChildren(root.children, pgnToTree(op.pgn, op.name).children);
+    } else if (op.variations) {
+      for (const variation of op.variations) insertVariation(root, variation);
     }
   }
   return root;
@@ -354,6 +426,7 @@ window.__trainer = {
   get history() { return sanList.slice(); },
   get target() { return targetLine ? targetLine.slice() : null; },
   get lineCount() { return ALL_LINES.length; },
+  get pgnErrors() { return pgnParseErrors.slice(); },
   userMove(from, to) { attemptUserMove(from, to); },
   newLine,
 };
