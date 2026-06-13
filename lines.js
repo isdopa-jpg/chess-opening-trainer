@@ -46,5 +46,22 @@ const OPENINGS = [
     ],
   },
 
+  {
+    name: "Scandinavian Defense",
+    variations: [
+      // --- Main line: 3...Qa5 ---
+      ["e4","d5","exd5","Qxd5","Nc3","Qa5","d4","Nf6","Nf3","c6","Bc4","Bf5",
+       "Ne5","e6","g4","Bg6","h4","Nbd7","Nxd7","Nxd7","h5","Be4","O-O","Bd5",
+       "Nxd5","cxd5","Bd3","Bd6","Bd2","Qb6","c3"],
+
+      // --- Sideline: 3...Qd8 ---
+      ["e4","d5","exd5","Qxd5","Nc3","Qd8","d4","Nf6","Nf3","c6","Bc4","Bf5",
+       "Ne5","e6","g4","Bg6","h4"],
+
+      // --- Sideline: 3...Qe5+ ---
+      ["e4","d5","exd5","Qxd5","Nc3","Qe5+","Nge2"],
+    ],
+  },
+
   // Add more openings here as you send them.
 ];
