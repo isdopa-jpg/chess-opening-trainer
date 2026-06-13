@@ -34,5 +34,17 @@ const OPENINGS = [
     ],
   },
 
+  {
+    name: "Owen Defense",
+    variations: [
+      // --- Main line: 4...Bb4 ---
+      // After 4...Bb4 the bishop pins Nc3, so 5.Ne2 needs no file disambiguation.
+      ["e4","b6","d4","Bb7","Nc3","e6","Bd3","Bb4","Ne2","Nf6","O-O"],
+
+      // --- Sideline: 4...Nf6 (no pin yet, so it's 5.Nge2) ---
+      ["e4","b6","d4","Bb7","Nc3","e6","Bd3","Nf6","Nge2"],
+    ],
+  },
+
   // Add more openings here as you send them.
 ];
