@@ -25,31 +25,24 @@
 const OPENINGS = [
   {
     name: "Caro-Kann: Exchange Variation",
-    variations: [
-      // --- Main line: 6...e6 ---
-      ["e4","c6","d4","d5","exd5","cxd5","Bd3","Nc6","c3","Nf6","h3","e6",
-       "Nf3","Be7","O-O","O-O","Re1","b6","Bf4","Bb7","Nbd2"],
+    pgn: `[Event "Dominik - Openings: White/Caro-Kann"]
+[Result "*"]
+[ECO "B13"]
+[Opening "Caro-Kann Defense: Exchange Variation"]
+[ChapterURL "https://lichess.org/study/J4couDp8/jLgQflP9"]
 
-      // --- Sideline: 6...e5 ---
-      ["e4","c6","d4","d5","exd5","cxd5","Bd3","Nc6","c3","Nf6","h3","e5",
-       "dxe5","Nxe5","Nf3","Nxd3+","Qxd3","Be7","O-O","O-O","Be3"],
-
-      // --- Sideline: 6...g6  (continuation past 9...Bf5 to be confirmed) ---
-      ["e4","c6","d4","d5","exd5","cxd5","Bd3","Nc6","c3","Nf6","h3","g6",
-       "Nf3","Bg7","O-O","O-O","Re1","Bf5"],
-    ],
+1. e4 c6 2. d4 d5 3. exd5 { Exchange Variation } 3... cxd5 4. Bd3 Nc6 5. c3 Nf6 6. h3 e6 { [%csl Rc8] } (6... e5 7. dxe5 Nxe5 8. Nf3 Nxd3+ 9. Qxd3 Be7 10. O-O O-O 11. Be3 $14 { [%csl Rd5][%cal Bb1d2,Ba1d1,Bf1e1] }) (6... g6 { [%cal Gf8g7] } 7. Nf3 Bg7 8. O-O O-O 9. Re1 Bf5 10. Bf1 (10. Bf4 Rc8 11. Bf1 $14 { [%csl Gb1][%cal Gb1d2] }) 10... Rc8 11. Bf4 $14 { [%cal Gb1d2] } 11... Qb6 12. Qb3 Qxb3 13. axb3 Bxb1 14. Rexb1 a6 15. b4 Rfd8 16. b5 axb5 17. Bxb5 Ne4) 7. Nf3 Be7 8. O-O O-O 9. Re1 b6 10. Bf4 Bb7 11. Nbd2 $14 { [%csl Ge5][%cal Gd1e2,Gf3e5] } *`,
   },
 
   {
     name: "Owen Defense",
-    variations: [
-      // --- Main line: 4...Bb4 ---
-      // After 4...Bb4 the bishop pins Nc3, so 5.Ne2 needs no file disambiguation.
-      ["e4","b6","d4","Bb7","Nc3","e6","Bd3","Bb4","Ne2","Nf6","O-O"],
+    pgn: `[Event "Dominik - Openings: Owen Defense"]
+[Result "*"]
+[ECO "B00"]
+[Opening "Owen Defense"]
+[ChapterURL "https://lichess.org/study/J4couDp8/zql1k2s4"]
 
-      // --- Sideline: 4...Nf6 (no pin yet, so it's 5.Nge2) ---
-      ["e4","b6","d4","Bb7","Nc3","e6","Bd3","Nf6","Nge2"],
-    ],
+1. e4 b6 2. d4 Bb7 3. Nc3 e6 4. Bd3 Bb4 (4... Nf6 5. Nge2 $14 { [%csl Ge1][%cal Ge1g1,Gc1g5] }) 5. Ne2 Nf6 6. O-O $16 *`,
   },
 
   {
