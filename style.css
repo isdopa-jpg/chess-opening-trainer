@@ -21,6 +21,13 @@ html, body {
   color: var(--text);
   font-family: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* disable double-tap-to-zoom on the UI (the board uses touch-action: none) */
+body, #app, #controls button, .status, .moves, h1#title {
+  touch-action: manipulation;
 }
 
 #app {
@@ -176,6 +183,7 @@ h1#title {
 #controls button:active { background: #4a4945; }
 #controls button#newBtn { background: var(--accent); }
 #controls button#newBtn:active { background: #4f7d1d; }
+#controls button:disabled { opacity: 0.4; cursor: default; }
 
 .moves {
   background: var(--panel);

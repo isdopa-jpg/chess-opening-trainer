@@ -113,6 +113,25 @@ let bag = [];
 let lastKey = null;
 let targetLine = null;
 
+// Lines you get wrong are served more often (up to ~3x as often as the rest).
+// Counts persist across sessions so the trainer keeps drilling your weak spots.
+const MISS_KEY = 'trainer.missCounts.v1';
+let missCounts = (() => {
+  try { return JSON.parse(localStorage.getItem(MISS_KEY)) || {}; } catch (e) { return {}; }
+})();
+function saveMissCounts() {
+  try { localStorage.setItem(MISS_KEY, JSON.stringify(missCounts)); } catch (e) {}
+}
+function lineWeight(line) {
+  return Math.min(3, 1 + (missCounts[line.join(' ')] || 0)); // 1x normally → up to 3x
+}
+function recordMiss() {
+  if (!targetLine) return;
+  const k = targetLine.join(' ');
+  missCounts[k] = Math.min(20, (missCounts[k] || 0) + 1);
+  saveMissCounts();
+}
+
 function shuffle(a) {
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -121,11 +140,30 @@ function shuffle(a) {
   return a;
 }
 
+// Build a shuffle bag where each line appears `weight` times (1–3). Still
+// shuffled, still no same-line back-to-back (within the bag and across cycles).
+function buildBag() {
+  const weighted = [];
+  for (const line of ALL_LINES) {
+    const w = lineWeight(line);
+    for (let i = 0; i < w; i++) weighted.push(line);
+  }
+  shuffle(weighted);
+  for (let i = 1; i < weighted.length; i++) {
+    if (weighted[i].join(' ') === weighted[i - 1].join(' ')) {
+      const prevKey = weighted[i - 1].join(' ');
+      const j = weighted.findIndex((l, idx) => idx > i && l.join(' ') !== prevKey);
+      if (j > -1) { const t = weighted[i]; weighted[i] = weighted[j]; weighted[j] = t; }
+    }
+  }
+  return weighted;
+}
+
 function nextTargetLine() {
   if (!ALL_LINES.length) return null;
   if (bag.length === 0) {
-    bag = shuffle(ALL_LINES.slice());
-    if (ALL_LINES.length > 1 && bag[0].join(' ') === lastKey) bag.push(bag.shift());
+    bag = buildBag();
+    if (bag.length > 1 && bag[0].join(' ') === lastKey) bag.push(bag.shift());
   }
   const line = bag.shift();
   lastKey = line.join(' ');
@@ -140,6 +178,7 @@ const statusEl = document.getElementById('status');
 const movesEl = document.getElementById('moves');
 const newBtn = document.getElementById('newBtn');
 const hintBtn = document.getElementById('hintBtn');
+const backBtn = document.getElementById('backBtn');
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 let game = new Chess();
@@ -147,6 +186,7 @@ let node = TREE;        // current position in the repertoire tree
 let selected = null;    // currently selected square
 let locked = true;      // input blocked (bot thinking / line over)
 let sanList = [];       // SAN moves played, for the move panel
+let botTimer = null;    // pending bot-reply timeout
 const squares = {};     // square name -> div
 
 // ---------------------------------------------------------------------------
@@ -206,6 +246,7 @@ function render(lastMove) {
     squares[lastMove.to]?.classList.add('lastmove');
   }
   renderMoves();
+  if (backBtn) backBtn.disabled = sanList.length === 0;
 }
 
 function renderMoves() {
@@ -253,7 +294,7 @@ function attemptUserMove(from, to) {
   const m = legalMove(from, to);
   if (!m) { fail(); return; }                 // not even a legal move
   const child = matchChild(m.san);
-  if (!child) { fail(to); return; }           // legal, but off the repertoire
+  if (!child) { recordMiss(); fail(to); return; } // legal, but off the repertoire
   // good move
   game.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' });
   sanList.push(m.san);
@@ -264,10 +305,11 @@ function attemptUserMove(from, to) {
   // now it's Black's turn
   locked = true;
   setStatus('…');
-  setTimeout(botMove, 450);
+  botTimer = setTimeout(botMove, 450);
 }
 
 function botMove() {
+  botTimer = null;
   const opts = node.children;
   // follow the pre-selected balanced target line when possible…
   let choice = null;
@@ -312,6 +354,7 @@ function lineComplete() {
 }
 
 function newLine() {
+  if (botTimer) { clearTimeout(botTimer); botTimer = null; }
   game = new Chess();
   node = TREE;
   sanList = [];
@@ -320,6 +363,38 @@ function newLine() {
   targetLine = nextTargetLine();
   render(null);
   setStatus('Your move — play White.');
+}
+
+// Step back to the previous position where it was your (White's) turn, undoing
+// your last move and the bot's reply so you can try the move again.
+function rebuildTo(len) {
+  if (botTimer) { clearTimeout(botTimer); botTimer = null; }
+  game = new Chess();
+  node = TREE;
+  const target = Math.max(0, Math.min(len, sanList.length));
+  const kept = [];
+  let last = null;
+  for (let i = 0; i < target; i++) {
+    const san = sanList[i];
+    const mv = game.moves({ verbose: true }).find((m) => norm(m.san) === norm(san));
+    if (!mv) break;
+    game.move({ from: mv.from, to: mv.to, promotion: mv.promotion || 'q' });
+    node = node.children.find((c) => norm(c.san) === norm(san)) || node;
+    kept.push(san);
+    last = { from: mv.from, to: mv.to };
+  }
+  sanList = kept;
+  selected = null;
+  locked = false;
+  render(last);
+  setStatus('Your move — play White.');
+}
+
+function goBack() {
+  if (sanList.length === 0) return;
+  const L = sanList.length;
+  const newLen = (L % 2 === 0) ? L - 2 : L - 1;
+  rebuildTo(newLen);
 }
 
 function hint() {
@@ -409,6 +484,16 @@ window.addEventListener('pointerup', onUp);
 
 newBtn.addEventListener('click', newLine);
 hintBtn.addEventListener('click', hint);
+backBtn.addEventListener('click', goBack);
+
+// ---------------------------------------------------------------------------
+// Block accidental zoom on touch devices (pinch + double-tap)
+// ---------------------------------------------------------------------------
+['gesturestart', 'gesturechange', 'gestureend'].forEach((t) =>
+  document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 1) e.preventDefault();   // pinch
+}, { passive: false });
 
 // ---------------------------------------------------------------------------
 // Init
@@ -427,6 +512,8 @@ window.__trainer = {
   get target() { return targetLine ? targetLine.slice() : null; },
   get lineCount() { return ALL_LINES.length; },
   get pgnErrors() { return pgnParseErrors.slice(); },
+  get missCounts() { return { ...missCounts }; },
   userMove(from, to) { attemptUserMove(from, to); },
   newLine,
+  back: goBack,
 };
