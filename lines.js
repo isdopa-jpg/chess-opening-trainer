@@ -103,5 +103,27 @@ const OPENINGS = [
 1. e4 e5 (1... d6 2. d4 Nf6 3. Nc3 e5 4. Nf3 Nbd7 5. h3! { It transposes }) 2. Nf3 d6 3. d4 exd4 (3... Nd7 4. Nc3 Ngf6 5. h3! { [%cal Gg2g4] } 5... Be7 (5... h5? { [%csl Rg5] } 6. Bc4 { [%csl Rf7][%cal Bf3g5] } 6... Be7 7. Ng5 O-O 8. O-O c6 9. a4 Qc7 10. Be3 $16 { [%csl Ga2][%cal Gc4a2] }) (5... c6 6. a4 Be7 7. g4 O-O 8. g5 Ne8 (8... Nh5 9. Be3 Re8 10. h4 Bf8 11. Be2 $14 { [%cal Gd1d2] }) 9. h4 { [%cal Gc1e3] }) 6. g4 h6 (6... h5? 7. g5 Nh7 8. h4 Nhf8 9. Be3 Ng6 10. Qd2 { [%csl Ge1][%cal Ge1c1] }) 7. Be3 c6 { [%cal Bb7b5] } 8. a4 O-O 9. Qd2 exd4 10. Bxd4 Qc7 11. g5 hxg5 12. Nxg5 $16 { [%csl Ge1][%cal Ge1c1,Gh1g1] }) (3... Nf6 4. Nc3 Nbd7 5. h3 { It transposes }) 4. Qxd4! { [%cal Gb1c3,Gc1f4,Ge1c1] } 4... Nc6 (4... Nf6 5. Nc3 Be7 6. Bf4 O-O 7. O-O-O Nc6 8. Qd2 a6 9. h3 b5 { [%csl Ge4][%cal Gb5b4,Gf6e4] } 10. Bd3 Be6 (10... b4? 11. Nd5 $16) 11. Kb1 b4 12. Nd5 $16) 5. Bb5 Bd7 6. Bxc6 Bxc6 (6... bxc6?! 7. Nc3 Nf6 8. Bf4 Be7 9. O-O-O O-O 10. Rhe1 Rb8 11. e5 $16) 7. Nc3 Nf6 8. Bf4 Be7 9. O-O-O O-O 10. Rhe1 Re8 11. Qd3! a6 12. Nd4 Bd7 13. h3 $14 { [%cal Gg2g4,Gc1b1] } *`,
   },
 
+  {
+    name: "Alekhine Defense: Exchange Variation",
+    pgn: `[Event "Against Alekhine"]
+[Result "*"]
+[ECO "B03"]
+[Opening "Alekhine Defense: Exchange Variation"]
+[ChapterURL "https://lichess.org/study/J4couDp8/7u86x0of"]
+
+1. e4 Nf6 2. e5 Nd5 3. d4 d6 4. c4 Nb6 5. exd6 cxd6 (5... exd6 6. Nc3 Be7 7. h3 O-O 8. Nf3 Bf5 9. Be2 Bf6 10. O-O Nc6 11. Be3 Re8 12. Rc1 $14 { [%cal Gb2b3,Gf1e1] } 12... h6 13. b3 a6 14. Re1 Bg6 15. Bf1 Qd7 16. d5 Ne7 17. Bd4) 6. Nc3 g6 7. h3 Bg7 8. Nf3 O-O 9. Be2 Nc6 10. O-O Bf5 (10... e5?! 11. Bg5! f6 (11... Qc7 12. d5! Ne7 13. c5!! $18) 12. Be3 f5 13. dxe5 dxe5 14. Qb3 $16 { [%cal Ga1d1] }) 11. Be3 d5 (11... e5 12. d5 Ne7 13. a4 $16) 12. b3! dxc4 13. bxc4 Qd7 14. Rc1 Rfd8 15. d5 $16 *`,
+  },
+
+  {
+    name: "Pirc & Modern Defense (Austrian Attack)",
+    pgn: `[Event "Pirc i Moderna"]
+[Result "*"]
+[ECO "B09"]
+[Opening "Pirc Defense: Austrian Attack, Weiss Variation"]
+[ChapterURL "https://lichess.org/study/J4couDp8/Ff7rrC32"]
+
+1. e4 d6 (1... g6 2. d4 Bg7 3. Nc3 d6 (3... c6 4. f4 { [%csl Gf3,Gc3][%cal Gg1f3] } 4... d5 5. e5 h5 (5... Nh6 6. Nf3 Bg4 7. Be3 Nf5 8. Bf2 h5 9. h3 Bxf3 10. Qxf3 h4 (10... e6? 11. g4 $16) 11. Bd3 e6 12. O-O Nd7 13. Ne2 Bf8 { [%cal Gf8e7] } 14. b3 Be7 15. c4 Kf8 { [%csl Gg7][%cal Gf8g7] } 16. Kh2 Kg7 17. Ng1 Rc8 18. Qe2 $16 { [%csl Gf3][%cal Gg1f3] }) 6. Nf3 Nh6 7. Be3 Bg4 8. h3 Nf5 9. Bf2 Bxf3 10. Qxf3 h4 (10... e6? 11. g4 $16 hxg4 12. hxg4 Rxh1 13. Qxh1 Ne7 14. Qh7 Kf8 15. Bh4 $18 { [%csl Ge1][%cal Ge1c1] }) 11. Bd3 e6 12. O-O Bf8 { [%cal Gf8e7] } 13. Ne2 (13. Kh2 Be7 14. Ne2 Nd7 15. Ng1 Kf8 16. Qe2 Kg7 17. Nf3 $14 { [%csl Rh4][%cal Bb2b3,Bc2c4,Ga1c1] }) 13... Nd7 14. b3 Be7 15. c4 Kf8 { [%cal Gf8g7] } 16. Kh2 Kg7 17. Ng1 Rc8 (17... a5 18. Qe2 $16 { [%csl Gf3][%cal Gg1f3] }) 18. Qe2 $16 { [%cal Bg1f3] }) (3... c5 4. d5 { Benoni } 4... d6 (4... Bxc3+? 5. bxc3 d6 6. c4 $16 { [%cal Bc1b2,Bb2h8] }) 5. Nf3 Nf6 6. Be2 O-O 7. O-O a6 8. a4 Nbd7 9. Nd2 { [%cal Bd2c4] } 9... Re8 10. Nc4 Nb6 11. Ne3 $14 { [%cal Ba4a5,Be3c4] } 11... e6 12. a5 Nbd7 13. Nc4 $16 { [%csl Rd6] }) 4. f4 { [%cal Bg1f3] } 4... a6 { [%cal Gb7b5] } (4... Nf6 { Prelazi u Pirca }) 5. Nf3 b5 6. Bd3 { [%csl Ge1][%cal Ge1g1] } 6... Bb7 (6... Nd7 7. e5! c5 8. Be4 Rb8 9. O-O cxd4 10. Nxd4 $16 { [%csl Gc6][%cal Gd4c6] }) (6... b4 7. Ne2 Bb7 8. O-O $16) 7. O-O Nd7 8. e5! e6 { [%cal Gg8e7] } (8... dxe5? 9. fxe5 $16) 9. Ne4 $16 { [%csl Gb2,Gc3,Gd4,Ge5,Gf4][%cal Bc2c3] } 9... Bxe4 (9... d5 10. Nf2 { [%cal Bc2c3] } 10... c5 11. c3 $16) 10. Bxe4 d5 11. Bd3 c5 12. c3 Ne7 13. Be3 c4 (13... Nf5 14. Bf2 cxd4 15. cxd4 { [%cal Gg2g4] } 15... h5 16. Rc1 O-O 17. h3 { [%cal Bg2g4] } 17... h4? 18. Bxf5 $18) 14. Bc2 Nf5 15. Bf2 { [%cal Gg2g4] } 15... h5 16. g3 $16 { [%cal Bg1g2,Bh2h3,Bg3g4] }) 2. d4 Nf6 (2... e5 3. Nf3 exd4 4. Qxd4 { Prelazi u Filidora }) 3. Nc3 g6 (3... c6 4. f4 Qa5 5. Bd3 e5 6. Nf3 Bg4 7. Be3 Nbd7 8. O-O Be7 9. h3 Bxf3 10. Qxf3 O-O 11. Ne2 $16 { [%cal Bc2c3] }) (3... e5 4. Nf3 exd4 5. Qxd4 Nc6 6. Bb5 Bd7 7. Bxc6 Bxc6 8. Bf4 { [%csl Ge1,Gc1][%cal Ge1c1] }) 4. f4 { [%csl Gd4,Ge4,Gf4][%cal Gg1f3] } 4... Bg7 5. Nf3 O-O (5... c5 6. dxc5 Qa5 { [%csl Re4][%cal Rf6e4] } 7. Bd3 Qxc5 8. Qe2 O-O 9. Be3 Qa5 10. O-O $14 Ng4 11. Bd2 Qb6+ 12. Kh1 Qxb2 13. Nd5 { [%csl Ge7,Gc7][%cal Gd5e7,Gd5c7] } 13... Nc6 14. Rab1 Qa3 15. Bb5 { [%cal Gb5c6,Gd5e7] }) 6. Bd3 { [%cal Ge1g1] } 6... Nc6 (6... Na6 7. O-O c5 8. d5 Rb8 (8... Bg4 9. Kh1! Nc7 10. Qe1! (10. a4 Rb8 11. Qe1 a6 12. a5 b5 13. axb6 Rxb6 14. Nd2! $16 { [%csl Gc4][%cal Gd2c4] }) 10... Bxf3 (10... Rb8 11. a4 a6 12. f5! b5 13. Qh4 b4 14. Ne2 { [%csl Gh6][%cal Ge2g3,Gc1h6] }) (10... b5 11. Nxb5) 11. Rxf3 $16) 9. Kh1! Nc7 (9... Nb4 10. Be2 $16 { [%cal Ga2a3] }) 10. a4 a6 11. a5 b5 12. axb6 Rxb6 13. Qe1 Nb5 14. Bd2 $16 { [%csl Gc3][%cal Gb5c3,Gd2c3] }) (6... Nbd7?! 7. e5! dxe5 8. dxe5 Ne8 9. Be3 Nb6 10. Qe2 $16 $40 { [%csl Ge1][%cal Ge1c1,Rh2h4,Rh4h5] }) (6... c5?! 7. dxc5 dxc5 8. e5 Nd5 9. Nxd5 Qxd5 10. Qe2 $14 { [%csl Ge4][%cal Gd3e4] }) (6... a6?! 7. O-O b5? 8. e5! dxe5 9. dxe5 Nd5 (9... Nfd7 10. Be4 $16) 10. Be4 Nxc3 11. Qxd8 Rxd8 12. Bxa8 $18) 7. e5! dxe5 8. dxe5 Nd5 9. Nxd5 Qxd5 10. Qe2 { [%csl Ge4][%cal Gd3e4] } 10... Bg4 (10... Nb4? 11. Be4 $16) 11. Be4 Qa5+ 12. Bd2 Qb6 13. O-O-O Nd4 14. Qc4 Rfd8 15. Be3 $14 *`,
+  },
+
   // Add more openings here as you send them.
 ];
