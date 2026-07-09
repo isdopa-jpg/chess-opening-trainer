@@ -79,20 +79,30 @@ function pgnToTree(pgn, name) {
   return root;
 }
 
-function buildTree(openings) {
+// Build the merged play-tree AND the list of complete lines, each tagged with
+// the side you play: 'white' = you move first (default); 'black' = the bot makes
+// White's moves and the board is flipped to Black's perspective.
+function buildAll(openings) {
   pgnParseErrors = [];
   const root = { san: null, children: [] };
+  const lines = [];
   for (const op of openings) {
+    const side = op.side === 'black' ? 'black' : 'white';
+    let opRoot;
     if (op.pgn) {
-      mergeChildren(root.children, pgnToTree(op.pgn, op.name).children);
-    } else if (op.variations) {
-      for (const variation of op.variations) insertVariation(root, variation);
+      opRoot = pgnToTree(op.pgn, op.name);
+    } else {
+      opRoot = { san: null, children: [] };
+      for (const variation of (op.variations || [])) insertVariation(opRoot, variation);
     }
+    mergeChildren(root.children, opRoot.children);
+    for (const moves of enumerateLines(opRoot)) lines.push({ moves, side });
   }
-  return root;
+  return { root, lines };
 }
 
-const TREE = buildTree(OPENINGS);
+const _built = buildAll(OPENINGS);
+const TREE = _built.root;
 
 // ---------------------------------------------------------------------------
 // Balanced line selection (shuffle bag): every complete line is played once
@@ -108,7 +118,7 @@ function enumerateLines(root) {
   return lines;
 }
 
-const ALL_LINES = enumerateLines(TREE);   // each is a full SAN sequence
+const ALL_LINES = _built.lines;   // [{ moves: [...san], side: 'white'|'black' }]
 let bag = [];
 let lastKey = null;
 let targetLine = null;
@@ -123,7 +133,7 @@ function saveMissCounts() {
   try { localStorage.setItem(MISS_KEY, JSON.stringify(missCounts)); } catch (e) {}
 }
 function lineWeight(line) {
-  return Math.min(3, 1 + (missCounts[line.join(' ')] || 0)); // 1x normally → up to 3x
+  return Math.min(3, 1 + (missCounts[line.moves.join(' ')] || 0)); // 1x normally → up to 3x
 }
 function recordMiss() {
   if (!targetLine) return;
@@ -150,9 +160,9 @@ function buildBag() {
   }
   shuffle(weighted);
   for (let i = 1; i < weighted.length; i++) {
-    if (weighted[i].join(' ') === weighted[i - 1].join(' ')) {
-      const prevKey = weighted[i - 1].join(' ');
-      const j = weighted.findIndex((l, idx) => idx > i && l.join(' ') !== prevKey);
+    if (weighted[i].moves.join(' ') === weighted[i - 1].moves.join(' ')) {
+      const prevKey = weighted[i - 1].moves.join(' ');
+      const j = weighted.findIndex((l, idx) => idx > i && l.moves.join(' ') !== prevKey);
       if (j > -1) { const t = weighted[i]; weighted[i] = weighted[j]; weighted[j] = t; }
     }
   }
@@ -163,10 +173,10 @@ function nextTargetLine() {
   if (!ALL_LINES.length) return null;
   if (bag.length === 0) {
     bag = buildBag();
-    if (bag.length > 1 && bag[0].join(' ') === lastKey) bag.push(bag.shift());
+    if (bag.length > 1 && bag[0].moves.join(' ') === lastKey) bag.push(bag.shift());
   }
   const line = bag.shift();
-  lastKey = line.join(' ');
+  lastKey = line.moves.join(' ');
   return line;
 }
 
@@ -179,6 +189,7 @@ const movesEl = document.getElementById('moves');
 const newBtn = document.getElementById('newBtn');
 const hintBtn = document.getElementById('hintBtn');
 const backBtn = document.getElementById('backBtn');
+const titleEl = document.getElementById('title');
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 let game = new Chess();
@@ -187,6 +198,8 @@ let selected = null;    // currently selected square
 let locked = true;      // input blocked (bot thinking / line over)
 let sanList = [];       // SAN moves played, for the move panel
 let botTimer = null;    // pending bot-reply timeout
+let userColor = 'w';    // 'w' = you play White (default), 'b' = you play Black
+let flipped = false;    // board orientation (true = Black at bottom)
 const squares = {};     // square name -> div
 
 // ---------------------------------------------------------------------------
@@ -194,23 +207,27 @@ const squares = {};     // square name -> div
 // ---------------------------------------------------------------------------
 function buildBoard() {
   boardEl.innerHTML = '';
-  for (let r = 0; r < 8; r++) {        // r=0 -> rank 8 (top)
-    for (let c = 0; c < 8; c++) {      // c=0 -> file a (left)
-      const sq = FILES[c] + (8 - r);
+  for (const k in squares) delete squares[k];
+  for (let row = 0; row < 8; row++) {      // row 0 = top of the board
+    for (let col = 0; col < 8; col++) {    // col 0 = left
+      const rank = flipped ? row + 1 : 8 - row;
+      const fileIdx = flipped ? 7 - col : col;
+      const file = FILES[fileIdx];
+      const sq = file + rank;
       const div = document.createElement('div');
-      const light = (r + c) % 2 === 0;
+      const light = (fileIdx + rank) % 2 === 0;   // a1 (0+1) = dark
       div.className = 'sq ' + (light ? 'light' : 'dark');
       div.dataset.square = sq;
-      if (c === 7) {                   // rank numbers on the right edge
+      if (col === 7) {                   // rank numbers on the right edge
         const s = document.createElement('span');
         s.className = 'coord rank ' + (light ? 'on-light' : 'on-dark');
-        s.textContent = 8 - r;
+        s.textContent = rank;
         div.appendChild(s);
       }
-      if (r === 7) {                   // file letters on the bottom edge
+      if (row === 7) {                   // file letters on the bottom edge
         const s = document.createElement('span');
         s.className = 'coord file ' + (light ? 'on-light' : 'on-dark');
-        s.textContent = FILES[c];
+        s.textContent = file;
         div.appendChild(s);
       }
       boardEl.appendChild(div);
@@ -277,6 +294,9 @@ function setStatus(text, cls) {
   statusEl.className = 'status' + (cls ? ' ' + cls : '');
 }
 
+function youPlay() { return userColor === 'w' ? 'White' : 'Black'; }
+function yourMove() { setStatus('Your move — play ' + youPlay() + '.'); }
+
 // ---------------------------------------------------------------------------
 // Trainer logic
 // ---------------------------------------------------------------------------
@@ -332,7 +352,7 @@ function botMove() {
   render({ from: m.from, to: m.to });
   if (node.children.length === 0) { lineComplete(); return; }
   locked = false;
-  setStatus('Your move — play White.');
+  yourMove();
 }
 
 function fail(badSquare) {
@@ -355,14 +375,26 @@ function lineComplete() {
 
 function newLine() {
   if (botTimer) { clearTimeout(botTimer); botTimer = null; }
+  const target = nextTargetLine();
+  targetLine = target ? target.moves : null;
+  userColor = target && target.side === 'black' ? 'b' : 'w';
+  if (titleEl) titleEl.textContent = 'Opening Trainer — you play ' + youPlay();
+  const wantFlip = userColor === 'b';
+  if (wantFlip !== flipped) { flipped = wantFlip; buildBoard(); }
   game = new Chess();
   node = TREE;
   sanList = [];
   selected = null;
-  locked = false;
-  targetLine = nextTargetLine();
   render(null);
-  setStatus('Your move — play White.');
+  if (userColor === 'w') {
+    locked = false;
+    yourMove();
+  } else {
+    // you play Black: the bot makes White's first move, then it's your turn
+    locked = true;
+    setStatus('…');
+    botTimer = setTimeout(botMove, 500);
+  }
 }
 
 // Step back to the previous position where it was your (White's) turn, undoing
@@ -387,19 +419,24 @@ function rebuildTo(len) {
   selected = null;
   locked = false;
   render(last);
-  setStatus('Your move — play White.');
+  yourMove();
 }
 
 function goBack() {
   if (sanList.length === 0) return;
   const L = sanList.length;
-  const newLen = (L % 2 === 0) ? L - 2 : L - 1;
+  // your-turn positions have even length if you're White, odd if you're Black
+  const wantEven = (userColor === 'w');
+  let newLen = L - 1;
+  while (newLen >= 0 && ((newLen % 2 === 0) !== wantEven)) newLen--;
+  const minLen = wantEven ? 0 : 1;   // Black can't go back past White's first move
+  if (newLen < minLen) return;
   rebuildTo(newLen);
 }
 
 function hint() {
   if (locked) return;
-  if (game.turn() !== 'w') return;
+  if (game.turn() !== userColor) return;
   const moves = node.children.map((c) => c.san);
   if (moves.length) setStatus('Hint: ' + moves.join(' or '));
 }
@@ -413,10 +450,12 @@ let drag = null;   // { from, started }
 function squareFromPoint(x, y) {
   const rect = boardEl.getBoundingClientRect();
   if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
-  const c = Math.floor(((x - rect.left) / rect.width) * 8);
-  const r = Math.floor(((y - rect.top) / rect.height) * 8);
-  if (c < 0 || c > 7 || r < 0 || r > 7) return null;
-  return FILES[c] + (8 - r);
+  const col = Math.floor(((x - rect.left) / rect.width) * 8);
+  const row = Math.floor(((y - rect.top) / rect.height) * 8);
+  if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+  const rank = flipped ? row + 1 : 8 - row;
+  const fileIdx = flipped ? 7 - col : col;
+  return FILES[fileIdx] + rank;
 }
 
 function onDown(e) {
@@ -430,8 +469,8 @@ function onDown(e) {
     attemptUserMove(selected, sq);
     return;
   }
-  // Selecting one of our own pieces (White, our turn).
-  if (piece && piece.color === 'w' && game.turn() === 'w') {
+  // Selecting one of our own pieces (our color, our turn).
+  if (piece && piece.color === userColor && game.turn() === userColor) {
     clearSelection();
     selected = sq;
     squares[sq].classList.add('sel');
@@ -511,6 +550,9 @@ window.__trainer = {
   get history() { return sanList.slice(); },
   get target() { return targetLine ? targetLine.slice() : null; },
   get lineCount() { return ALL_LINES.length; },
+  get sides() { const s = { white: 0, black: 0 }; ALL_LINES.forEach((l) => s[l.side]++); return s; },
+  get userColor() { return userColor; },
+  get flipped() { return flipped; },
   get pgnErrors() { return pgnParseErrors.slice(); },
   get missCounts() { return { ...missCounts }; },
   userMove(from, to) { attemptUserMove(from, to); },

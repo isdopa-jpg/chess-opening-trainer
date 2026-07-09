@@ -20,6 +20,11 @@
 //
 // To add a new opening: copy a block below, give it a name, and provide either
 // `variations` or `pgn`.
+//
+// SIDE: by default you play White (you move first). For a Black repertoire
+// (e.g. QGA, a defense to 1.d4), add `side: "black"` — the app flips the board
+// to Black's view and the bot makes White's moves. The PGN/variations still
+// start from move 1 with White's move either way.
 // =============================================================================
 
 const OPENINGS = [
