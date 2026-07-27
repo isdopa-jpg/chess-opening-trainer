@@ -33,7 +33,12 @@ body, #app, #controls button, .status, .moves, h1#title {
 #app {
   max-width: 560px;
   margin: 0 auto;
-  padding: 12px 12px 32px;
+  /* keep content clear of the iPhone status bar / notch / home indicator
+     (needs viewport-fit=cover, which is set in index.html) */
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(12px + env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
   gap: 12px;
