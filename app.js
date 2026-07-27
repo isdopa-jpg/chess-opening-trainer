@@ -96,7 +96,7 @@ function buildAll(openings) {
       for (const variation of (op.variations || [])) insertVariation(opRoot, variation);
     }
     mergeChildren(root.children, opRoot.children);
-    for (const moves of enumerateLines(opRoot)) lines.push({ moves, side });
+    for (const moves of enumerateLines(opRoot)) lines.push({ moves, side, opening: op.name });
   }
   return { root, lines };
 }
@@ -118,7 +118,28 @@ function enumerateLines(root) {
   return lines;
 }
 
-const ALL_LINES = _built.lines;   // [{ moves: [...san], side: 'white'|'black' }]
+const ALL_LINES = _built.lines;   // [{ moves, side, opening }]
+
+// Per-opening metadata (in study order), plus the current practice filter.
+const OPENING_META = (() => {
+  const map = new Map();
+  for (const l of ALL_LINES) {
+    if (!map.has(l.opening)) map.set(l.opening, { name: l.opening, side: l.side, count: 0 });
+    map.get(l.opening).count++;
+  }
+  return [...map.values()];
+})();
+
+const FILTER_KEY = 'trainer.filter.v1';
+let filter = (() => {           // null = practice all openings
+  try {
+    const f = localStorage.getItem(FILTER_KEY);
+    return f && OPENING_META.some((o) => o.name === f) ? f : null;
+  } catch (e) { return null; }
+})();
+function activeLines() {
+  return filter ? ALL_LINES.filter((l) => l.opening === filter) : ALL_LINES;
+}
 let bag = [];
 let lastKey = null;
 let targetLine = null;
@@ -154,7 +175,7 @@ function shuffle(a) {
 // shuffled, still no same-line back-to-back (within the bag and across cycles).
 function buildBag() {
   const weighted = [];
-  for (const line of ALL_LINES) {
+  for (const line of activeLines()) {
     const w = lineWeight(line);
     for (let i = 0; i < w; i++) weighted.push(line);
   }
@@ -170,7 +191,7 @@ function buildBag() {
 }
 
 function nextTargetLine() {
-  if (!ALL_LINES.length) return null;
+  if (!activeLines().length) return null;
   if (bag.length === 0) {
     bag = buildBag();
     if (bag.length > 1 && bag[0].moves.join(' ') === lastKey) bag.push(bag.shift());
@@ -190,6 +211,7 @@ const newBtn = document.getElementById('newBtn');
 const hintBtn = document.getElementById('hintBtn');
 const backBtn = document.getElementById('backBtn');
 const titleEl = document.getElementById('title');
+const pickerEl = document.getElementById('picker');
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 let game = new Chess();
@@ -442,6 +464,78 @@ function hint() {
 }
 
 // ---------------------------------------------------------------------------
+// Opening picker — choose one opening to drill, or "All" for the full mix.
+// ---------------------------------------------------------------------------
+let pickerOpen = false;
+
+function shortName(name) {
+  if (name.startsWith('QGA')) {
+    const paren = name.match(/\(([^)]+)\)/);
+    return paren ? 'QGA ' + paren[1] : name.replace(/:\s*/, ' ');
+  }
+  return name.split(':')[0].replace(/\s*\([^)]*\)/, '').replace(/\s*(Defense|Game)\b/, '').trim();
+}
+
+function currentLabel() {
+  if (!filter) return `All openings (${ALL_LINES.length})`;
+  const m = OPENING_META.find((o) => o.name === filter);
+  return m ? `${shortName(m.name)} (${m.count})` : filter;
+}
+
+function chip(label, title, active, onClick) {
+  const b = document.createElement('button');
+  b.className = 'chip' + (active ? ' active' : '');
+  b.textContent = label;
+  if (title) b.title = title;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function renderPicker() {
+  if (!pickerEl) return;
+  pickerEl.innerHTML = '';
+  const header = document.createElement('button');
+  header.className = 'picker-header';
+  header.innerHTML = `<span class="caret">${pickerOpen ? '▾' : '▸'}</span> Practice: <strong>${currentLabel()}</strong>`;
+  header.addEventListener('click', () => { pickerOpen = !pickerOpen; renderPicker(); });
+  pickerEl.appendChild(header);
+  if (!pickerOpen) return;
+
+  const panel = document.createElement('div');
+  panel.className = 'picker-panel';
+  const allRow = document.createElement('div');
+  allRow.className = 'chip-row';
+  allRow.appendChild(chip(`All (${ALL_LINES.length})`, 'Practice every opening', !filter, () => selectFilter(null)));
+  panel.appendChild(allRow);
+
+  for (const side of ['white', 'black']) {
+    const metas = OPENING_META.filter((o) => o.side === side);
+    if (!metas.length) continue;
+    const lbl = document.createElement('div');
+    lbl.className = 'picker-group';
+    lbl.textContent = side === 'white' ? 'You play White' : 'You play Black';
+    panel.appendChild(lbl);
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    for (const m of metas) {
+      row.appendChild(chip(`${shortName(m.name)} (${m.count})`, m.name, filter === m.name, () => selectFilter(m.name)));
+    }
+    panel.appendChild(row);
+  }
+  pickerEl.appendChild(panel);
+}
+
+function selectFilter(name) {
+  filter = name;                 // null or opening name
+  bag = [];
+  lastKey = null;
+  try { localStorage.setItem(FILTER_KEY, name || ''); } catch (e) {}
+  pickerOpen = false;
+  renderPicker();
+  newLine();
+}
+
+// ---------------------------------------------------------------------------
 // Pointer input (tap-to-move + drag), works on touch and mouse
 // ---------------------------------------------------------------------------
 const ghost = document.getElementById('ghost');
@@ -538,6 +632,7 @@ document.addEventListener('touchmove', (e) => {
 // Init
 // ---------------------------------------------------------------------------
 buildBoard();
+renderPicker();
 newLine();
 
 // expose a tiny hook for automated testing
@@ -551,6 +646,9 @@ window.__trainer = {
   get target() { return targetLine ? targetLine.slice() : null; },
   get lineCount() { return ALL_LINES.length; },
   get sides() { const s = { white: 0, black: 0 }; ALL_LINES.forEach((l) => s[l.side]++); return s; },
+  get openings() { return OPENING_META.map((o) => ({ ...o })); },
+  get filter() { return filter; },
+  setFilter: selectFilter,
   get userColor() { return userColor; },
   get flipped() { return flipped; },
   get pgnErrors() { return pgnParseErrors.slice(); },

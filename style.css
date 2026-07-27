@@ -185,6 +185,53 @@ h1#title {
 #controls button#newBtn:active { background: #4f7d1d; }
 #controls button:disabled { opacity: 0.4; cursor: default; }
 
+/* opening picker */
+.picker { display: flex; flex-direction: column; gap: 0; }
+.picker-header {
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  font-size: 0.98rem;
+  color: var(--text);
+  background: var(--panel);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.picker-header strong { color: #fff; font-weight: 600; }
+.picker-header .caret { display: inline-block; width: 1em; color: var(--accent); }
+.picker-panel {
+  margin-top: 6px;
+  padding: 10px 12px 12px;
+  background: var(--panel);
+  border-radius: 6px;
+}
+.picker-group {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8a8a8a;
+  margin: 12px 2px 6px;
+}
+.chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  padding: 7px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #e6e6e6;
+  background: #3a3936;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip:active { background: #4a4945; }
+.chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .moves {
   background: var(--panel);
   border-radius: 6px;
