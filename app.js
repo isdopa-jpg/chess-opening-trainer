@@ -140,6 +140,16 @@ let filter = (() => {           // null = practice all openings
 function activeLines() {
   return filter ? ALL_LINES.filter((l) => l.opening === filter) : ALL_LINES;
 }
+
+// Accuracy stats: first meaningful attempt at each decision counts once, per
+// opening (persisted) and for this session.
+const STATS_KEY = 'trainer.stats.v1';
+let stats = (() => {
+  try { const s = JSON.parse(localStorage.getItem(STATS_KEY)); return s && s.byOpening ? s : { byOpening: {} }; }
+  catch (e) { return { byOpening: {} }; }
+})();
+let session = { correct: 0, wrong: 0 };
+function saveStats() { try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) {} }
 let bag = [];
 let lastKey = null;
 let targetLine = null;
@@ -212,6 +222,7 @@ const hintBtn = document.getElementById('hintBtn');
 const backBtn = document.getElementById('backBtn');
 const titleEl = document.getElementById('title');
 const pickerEl = document.getElementById('picker');
+const tickerEl = document.getElementById('ticker');
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 let game = new Chess();
@@ -222,6 +233,8 @@ let sanList = [];       // SAN moves played, for the move panel
 let botTimer = null;    // pending bot-reply timeout
 let userColor = 'w';    // 'w' = you play White (default), 'b' = you play Black
 let flipped = false;    // board orientation (true = Black at bottom)
+let targetOpening = null; // opening name of the current line (title + stats)
+let decisionScored = false; // has the current move-decision been counted yet?
 const squares = {};     // square name -> div
 
 // ---------------------------------------------------------------------------
@@ -319,6 +332,35 @@ function setStatus(text, cls) {
 function youPlay() { return userColor === 'w' ? 'White' : 'Black'; }
 function yourMove() { setStatus('Your move — play ' + youPlay() + '.'); }
 
+// --- accuracy ticker -------------------------------------------------------
+function pct(s) { const t = s.correct + s.wrong; return t ? Math.round((100 * s.correct) / t) : null; }
+function overallStats() {
+  const t = { correct: 0, wrong: 0 };
+  for (const k in stats.byOpening) { t.correct += stats.byOpening[k].correct; t.wrong += stats.byOpening[k].wrong; }
+  return t;
+}
+function scoreDecision(correct) {
+  if (decisionScored) return;           // only the first meaningful attempt counts
+  decisionScored = true;
+  session[correct ? 'correct' : 'wrong']++;
+  if (targetOpening) {
+    const o = stats.byOpening[targetOpening] || (stats.byOpening[targetOpening] = { correct: 0, wrong: 0 });
+    o[correct ? 'correct' : 'wrong']++;
+  }
+  saveStats();
+  renderTicker();
+}
+function renderTicker() {
+  if (!tickerEl) return;
+  const scoped = filter ? (stats.byOpening[filter] || { correct: 0, wrong: 0 }) : overallStats();
+  const label = filter ? shortName(filter) : 'Overall';
+  const a = pct(scoped), sa = pct(session);
+  const tot = scoped.correct + scoped.wrong;
+  tickerEl.innerHTML =
+    `<span class="tk-scope">${label}: <strong>${a == null ? '—' : a + '%'}</strong> <span class="tk-sub">${scoped.correct}/${tot}</span></span>` +
+    `<span class="tk-sub">session ${sa == null ? '—' : sa + '%'}</span>`;
+}
+
 // ---------------------------------------------------------------------------
 // Trainer logic
 // ---------------------------------------------------------------------------
@@ -334,10 +376,11 @@ function matchChild(san) {
 function attemptUserMove(from, to) {
   if (locked) return;
   const m = legalMove(from, to);
-  if (!m) { fail(); return; }                 // not even a legal move
+  if (!m) { fail(); return; }                 // illegal input — not scored (mis-drag)
   const child = matchChild(m.san);
-  if (!child) { recordMiss(); fail(to); return; } // legal, but off the repertoire
+  if (!child) { scoreDecision(false); recordMiss(); fail(to); return; } // off the repertoire
   // good move
+  scoreDecision(true);
   game.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' });
   sanList.push(m.san);
   node = child;
@@ -374,6 +417,7 @@ function botMove() {
   render({ from: m.from, to: m.to });
   if (node.children.length === 0) { lineComplete(); return; }
   locked = false;
+  decisionScored = false;
   yourMove();
 }
 
@@ -399,14 +443,19 @@ function newLine() {
   if (botTimer) { clearTimeout(botTimer); botTimer = null; }
   const target = nextTargetLine();
   targetLine = target ? target.moves : null;
+  targetOpening = target ? target.opening : null;
   userColor = target && target.side === 'black' ? 'b' : 'w';
-  if (titleEl) titleEl.textContent = 'Opening Trainer — you play ' + youPlay();
+  if (titleEl) {
+    titleEl.innerHTML = (targetOpening || 'Opening Trainer') +
+      ' <span class="side">· you play ' + youPlay() + '</span>';
+  }
   const wantFlip = userColor === 'b';
   if (wantFlip !== flipped) { flipped = wantFlip; buildBoard(); }
   game = new Chess();
   node = TREE;
   sanList = [];
   selected = null;
+  decisionScored = false;
   render(null);
   if (userColor === 'w') {
     locked = false;
@@ -440,6 +489,7 @@ function rebuildTo(len) {
   sanList = kept;
   selected = null;
   locked = false;
+  decisionScored = false;
   render(last);
   yourMove();
 }
@@ -532,6 +582,7 @@ function selectFilter(name) {
   try { localStorage.setItem(FILTER_KEY, name || ''); } catch (e) {}
   pickerOpen = false;
   renderPicker();
+  renderTicker();
   newLine();
 }
 
@@ -633,6 +684,7 @@ document.addEventListener('touchmove', (e) => {
 // ---------------------------------------------------------------------------
 buildBoard();
 renderPicker();
+renderTicker();
 newLine();
 
 // expose a tiny hook for automated testing
@@ -649,6 +701,9 @@ window.__trainer = {
   get openings() { return OPENING_META.map((o) => ({ ...o })); },
   get filter() { return filter; },
   setFilter: selectFilter,
+  get stats() { return JSON.parse(JSON.stringify({ byOpening: stats.byOpening, session })); },
+  get openingName() { return targetOpening; },
+  resetStats() { stats = { byOpening: {} }; session = { correct: 0, wrong: 0 }; saveStats(); renderTicker(); },
   get userColor() { return userColor; },
   get flipped() { return flipped; },
   get pgnErrors() { return pgnParseErrors.slice(); },
