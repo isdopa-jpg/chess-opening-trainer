@@ -223,6 +223,16 @@ const backBtn = document.getElementById('backBtn');
 const titleEl = document.getElementById('title');
 const pickerEl = document.getElementById('picker');
 const tickerEl = document.getElementById('ticker');
+const optsToggleEl = document.getElementById('optsToggle');
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const arrowsSvg = document.createElementNS(SVGNS, 'svg');
+arrowsSvg.setAttribute('id', 'arrows');
+arrowsSvg.setAttribute('viewBox', '0 0 8 8');
+arrowsSvg.setAttribute('preserveAspectRatio', 'none');
+
+const OPTS_KEY = 'trainer.showOptions.v1';
+let showOptions = (() => { try { return localStorage.getItem(OPTS_KEY) !== 'off'; } catch (e) { return true; } })();
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 let game = new Chess();
@@ -269,6 +279,8 @@ function buildBoard() {
       squares[sq] = div;
     }
   }
+  clearArrows();
+  boardEl.appendChild(arrowsSvg);   // overlay on top of the squares
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +291,7 @@ function pieceSrc(p) {
 }
 
 function render(lastMove) {
+  clearArrows();
   for (const sq in squares) {
     const div = squares[sq];
     div.classList.remove('sel', 'lastmove', 'dest', 'occupied', 'bad');
@@ -322,6 +335,49 @@ function showDests(from) {
 function clearSelection() {
   selected = null;
   for (const sq in squares) squares[sq].classList.remove('sel', 'dest', 'occupied');
+}
+
+// --- option arrows (opponent's alternatives at a branch) -------------------
+function clearArrows() {
+  if (!arrowsSvg) return;
+  while (arrowsSvg.firstChild) arrowsSvg.removeChild(arrowsSvg.firstChild);
+}
+function cellCenter(sq) {
+  const fileIdx = FILES.indexOf(sq[0]);
+  const rank = parseInt(sq.slice(1), 10);
+  const col = flipped ? 7 - fileIdx : fileIdx;
+  const row = flipped ? rank - 1 : 8 - rank;
+  return { x: col + 0.5, y: row + 0.5 };
+}
+function drawArrow(from, to) {
+  const a = cellCenter(from), b = cellCenter(to);
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+  const shaftW = 0.11, headW = 0.24, headLen = 0.32;
+  const sx = a.x + ux * 0.26, sy = a.y + uy * 0.26;   // start just outside source centre
+  const tx = b.x - ux * 0.16, ty = b.y - uy * 0.16;   // tip just inside target centre
+  const bx = tx - ux * headLen, by = ty - uy * headLen;
+  const pts = [
+    [sx + nx * shaftW, sy + ny * shaftW],
+    [bx + nx * shaftW, by + ny * shaftW],
+    [bx + nx * headW, by + ny * headW],
+    [tx, ty],
+    [bx - nx * headW, by - ny * headW],
+    [bx - nx * shaftW, by - ny * shaftW],
+    [sx - nx * shaftW, sy - ny * shaftW],
+  ];
+  const poly = document.createElementNS(SVGNS, 'polygon');
+  poly.setAttribute('points', pts.map((p) => p[0].toFixed(3) + ',' + p[1].toFixed(3)).join(' '));
+  poly.setAttribute('class', 'arrow');
+  arrowsSvg.appendChild(poly);
+}
+function drawOptionArrows(sans) {
+  const verbose = game.moves({ verbose: true });
+  for (const san of sans) {
+    const mv = verbose.find((m) => norm(m.san) === norm(san));
+    if (mv) drawArrow(mv.from, mv.to);
+  }
 }
 
 function setStatus(text, cls) {
@@ -369,25 +425,41 @@ function legalMove(from, to) {
     .find((m) => m.to === to) || null;
 }
 
+// Options for the side to move, restricted to the active practice filter:
+// the next move of every active line whose prefix matches what's been played.
+function currentOptions() {
+  const depth = sanList.length;
+  const seen = new Map();
+  for (const line of activeLines()) {
+    const mv = line.moves;
+    if (mv.length <= depth) continue;
+    let ok = true;
+    for (let i = 0; i < depth; i++) { if (norm(mv[i]) !== norm(sanList[i])) { ok = false; break; } }
+    if (ok) { const s = mv[depth]; const k = norm(s); if (!seen.has(k)) seen.set(k, s); }
+  }
+  return [...seen.values()];
+}
 function matchChild(san) {
-  return node.children.find((c) => norm(c.san) === norm(san)) || null;
+  return currentOptions().some((o) => norm(o) === norm(san));
+}
+function advance(san) {   // keep the merged-tree pointer in sync
+  node = node.children.find((c) => norm(c.san) === norm(san)) || node;
 }
 
 function attemptUserMove(from, to) {
   if (locked) return;
   const m = legalMove(from, to);
   if (!m) { fail(); return; }                 // illegal input — not scored (mis-drag)
-  const child = matchChild(m.san);
-  if (!child) { scoreDecision(false); recordMiss(); fail(to); return; } // off the repertoire
+  if (!matchChild(m.san)) { scoreDecision(false); recordMiss(); fail(to); return; } // off repertoire
   // good move
   scoreDecision(true);
   game.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' });
   sanList.push(m.san);
-  node = child;
+  advance(m.san);
   clearSelection();
   render({ from: m.from, to: m.to });
-  if (node.children.length === 0) { lineComplete(); return; }
-  // now it's Black's turn
+  if (currentOptions().length === 0) { lineComplete(); return; }
+  // now it's the opponent's turn
   locked = true;
   setStatus('…');
   botTimer = setTimeout(botMove, 450);
@@ -395,27 +467,39 @@ function attemptUserMove(from, to) {
 
 function botMove() {
   botTimer = null;
-  const opts = node.children;
+  const optSans = currentOptions();                    // filter-aware
   // follow the pre-selected balanced target line when possible…
-  let choice = null;
+  let chosen = null;
   if (targetLine) {
     const wantSan = targetLine[sanList.length];
-    choice = opts.find((c) => norm(c.san) === norm(wantSan)) || null;
+    if (optSans.some((s) => norm(s) === norm(wantSan))) chosen = wantSan;
   }
-  // …otherwise (e.g. user chose a different valid White branch) fall back to random
-  if (!choice) choice = opts[Math.floor(Math.random() * opts.length)];
-  // find the matching legal move and play it
+  // …otherwise (e.g. user chose a different valid branch) fall back to random
+  if (!chosen) chosen = optSans[Math.floor(Math.random() * optSans.length)];
+  // at a genuine branch, first show the opponent's alternatives as arrows
+  if (showOptions && optSans.length > 1) {
+    drawOptionArrows(optSans);
+    setStatus("Opponent's options…");
+    botTimer = setTimeout(() => playBotChoice(chosen), 1200);
+  } else {
+    playBotChoice(chosen);
+  }
+}
+
+function playBotChoice(chosenSan) {
+  botTimer = null;
+  clearArrows();
   const verbose = game.moves({ verbose: true });
-  const m = verbose.find((mv) => norm(mv.san) === norm(choice.san));
+  const m = verbose.find((mv) => norm(mv.san) === norm(chosenSan));
   if (!m) {                                    // should never happen if lines are legal
-    setStatus('Line data error: ' + choice.san, 'fail');
+    setStatus('Line data error: ' + chosenSan, 'fail');
     return;
   }
   game.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' });
   sanList.push(m.san);
-  node = choice;
+  advance(m.san);
   render({ from: m.from, to: m.to });
-  if (node.children.length === 0) { lineComplete(); return; }
+  if (currentOptions().length === 0) { lineComplete(); return; }
   locked = false;
   decisionScored = false;
   yourMove();
@@ -509,7 +593,7 @@ function goBack() {
 function hint() {
   if (locked) return;
   if (game.turn() !== userColor) return;
-  const moves = node.children.map((c) => c.san);
+  const moves = currentOptions();
   if (moves.length) setStatus('Hint: ' + moves.join(' or '));
 }
 
@@ -584,6 +668,21 @@ function selectFilter(name) {
   renderPicker();
   renderTicker();
   newLine();
+}
+
+function renderOptsToggle() {
+  if (!optsToggleEl) return;
+  optsToggleEl.innerHTML = '';
+  const b = document.createElement('button');
+  b.className = 'opts-btn' + (showOptions ? ' on' : '');
+  b.textContent = (showOptions ? '◉' : '◯') + "  Show opponent's options";
+  b.addEventListener('click', () => {
+    showOptions = !showOptions;
+    try { localStorage.setItem(OPTS_KEY, showOptions ? 'on' : 'off'); } catch (e) {}
+    if (!showOptions) clearArrows();
+    renderOptsToggle();
+  });
+  optsToggleEl.appendChild(b);
 }
 
 // ---------------------------------------------------------------------------
@@ -685,13 +784,14 @@ document.addEventListener('touchmove', (e) => {
 buildBoard();
 renderPicker();
 renderTicker();
+renderOptsToggle();
 newLine();
 
 // expose a tiny hook for automated testing
 window.__trainer = {
   get fen() { return game.fen(); },
   get turn() { return game.turn(); },
-  get options() { return node.children.map((c) => c.san); },
+  get options() { return currentOptions(); },
   get status() { return statusEl.textContent; },
   get locked() { return locked; },
   get history() { return sanList.slice(); },
@@ -703,6 +803,8 @@ window.__trainer = {
   setFilter: selectFilter,
   get stats() { return JSON.parse(JSON.stringify({ byOpening: stats.byOpening, session })); },
   get openingName() { return targetOpening; },
+  get showOptions() { return showOptions; },
+  get arrowCount() { return arrowsSvg.querySelectorAll('polygon').length; },
   resetStats() { stats = { byOpening: {} }; session = { correct: 0, wrong: 0 }; saveStats(); renderTicker(); },
   get userColor() { return userColor; },
   get flipped() { return flipped; },
