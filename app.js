@@ -429,8 +429,10 @@ function legalMove(from, to) {
 // the next move of every active line whose prefix matches what's been played.
 function currentOptions() {
   const depth = sanList.length;
+  const wantSide = userColor === 'b' ? 'black' : 'white';
   const seen = new Map();
   for (const line of activeLines()) {
+    if (line.side !== wantSide) continue;   // stay within this drill's side
     const mv = line.moves;
     if (mv.length <= depth) continue;
     let ok = true;
@@ -458,7 +460,7 @@ function attemptUserMove(from, to) {
   advance(m.san);
   clearSelection();
   render({ from: m.from, to: m.to });
-  if (currentOptions().length === 0) { lineComplete(); return; }
+  if (currentOptions().length === 0 || (targetLine && sanList.length >= targetLine.length)) { lineComplete(); return; }
   // now it's the opponent's turn
   locked = true;
   setStatus('…');
@@ -468,11 +470,12 @@ function attemptUserMove(from, to) {
 function botMove() {
   botTimer = null;
   const optSans = currentOptions();                    // filter-aware
+  if (!optSans.length) { lineComplete(); return; }
   // follow the pre-selected balanced target line when possible…
   let chosen = null;
   if (targetLine) {
     const wantSan = targetLine[sanList.length];
-    if (optSans.some((s) => norm(s) === norm(wantSan))) chosen = wantSan;
+    if (wantSan && optSans.some((s) => norm(s) === norm(wantSan))) chosen = wantSan;
   }
   // …otherwise (e.g. user chose a different valid branch) fall back to random
   if (!chosen) chosen = optSans[Math.floor(Math.random() * optSans.length)];
@@ -499,7 +502,7 @@ function playBotChoice(chosenSan) {
   sanList.push(m.san);
   advance(m.san);
   render({ from: m.from, to: m.to });
-  if (currentOptions().length === 0) { lineComplete(); return; }
+  if (currentOptions().length === 0 || (targetLine && sanList.length >= targetLine.length)) { lineComplete(); return; }
   locked = false;
   decisionScored = false;
   yourMove();
