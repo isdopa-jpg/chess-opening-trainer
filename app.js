@@ -137,8 +137,30 @@ let filter = (() => {           // null = practice all openings
     return f && OPENING_META.some((o) => o.name === f) ? f : null;
   } catch (e) { return null; }
 })();
+// A stable, unique key for one repertoire line (opening-qualified so lines that
+// share a move sequence across sides/openings never collide).
+function lineKey(line) { return line.opening + '||' + line.moves.join(' '); }
+
+// When set, drill just this one line (its lineKey); otherwise the active filter.
+let lineFilter = null;
 function activeLines() {
-  return filter ? ALL_LINES.filter((l) => l.opening === filter) : ALL_LINES;
+  let ls = filter ? ALL_LINES.filter((l) => l.opening === filter) : ALL_LINES;
+  if (lineFilter) ls = ls.filter((l) => lineKey(l) === lineFilter);
+  return ls;
+}
+
+// Rolling last-5 outcome per line (1 = clean first try, 0 = had a wrong move),
+// keyed by lineKey; drives the per-line accuracy badges.
+const LINESTATS_KEY = 'trainer.lineStats.v1';
+let lineStats = (() => {
+  try { return JSON.parse(localStorage.getItem(LINESTATS_KEY)) || {}; } catch (e) { return {}; }
+})();
+function saveLineStats() { try { localStorage.setItem(LINESTATS_KEY, JSON.stringify(lineStats)); } catch (e) {} }
+function lineAccuracy(key) {
+  const arr = lineStats[key];
+  if (!arr || !arr.length) return null;
+  const sum = arr.reduce((a, b) => a + b, 0);
+  return { pct: Math.round((100 * sum) / arr.length), count: arr.length };
 }
 
 // Accuracy stats: first meaningful attempt at each decision counts once, per
@@ -222,6 +244,7 @@ const hintBtn = document.getElementById('hintBtn');
 const backBtn = document.getElementById('backBtn');
 const titleEl = document.getElementById('title');
 const pickerEl = document.getElementById('picker');
+const linesPanelEl = document.getElementById('linesPanel');
 const tickerEl = document.getElementById('ticker');
 const optsToggleEl = document.getElementById('optsToggle');
 
@@ -245,6 +268,8 @@ let userColor = 'w';    // 'w' = you play White (default), 'b' = you play Black
 let flipped = false;    // board orientation (true = Black at bottom)
 let targetOpening = null; // opening name of the current line (title + stats)
 let decisionScored = false; // has the current move-decision been counted yet?
+let currentTryKey = null;   // lineKey of the line being attempted (for last-5 stats)
+let currentTryHadMistake = false; // did the current attempt include a wrong move?
 const squares = {};     // square name -> div
 
 // ---------------------------------------------------------------------------
@@ -452,7 +477,7 @@ function attemptUserMove(from, to) {
   if (locked) return;
   const m = legalMove(from, to);
   if (!m) { fail(); return; }                 // illegal input — not scored (mis-drag)
-  if (!matchChild(m.san)) { scoreDecision(false); recordMiss(); fail(to); return; } // off repertoire
+  if (!matchChild(m.san)) { scoreDecision(false); recordMiss(); currentTryHadMistake = true; fail(to); return; } // off repertoire
   // good move
   scoreDecision(true);
   game.move({ from: m.from, to: m.to, promotion: m.promotion || 'q' });
@@ -524,6 +549,14 @@ function lineComplete() {
   locked = true;
   clearSelection();
   setStatus('✅ Line complete! Press “New line”.', 'ok');
+  if (currentTryKey) {
+    const arr = lineStats[currentTryKey] || (lineStats[currentTryKey] = []);
+    arr.push(currentTryHadMistake ? 0 : 1);
+    if (arr.length > 5) arr.shift();
+    saveLineStats();
+    renderLines();
+    currentTryKey = null;   // guard against double-counting one completion
+  }
 }
 
 function newLine() {
@@ -531,6 +564,8 @@ function newLine() {
   const target = nextTargetLine();
   targetLine = target ? target.moves : null;
   targetOpening = target ? target.opening : null;
+  currentTryKey = target ? lineKey(target) : null;
+  currentTryHadMistake = false;
   userColor = target && target.side === 'black' ? 'b' : 'w';
   if (titleEl) {
     titleEl.innerHTML = (targetOpening || 'Opening Trainer') +
@@ -660,12 +695,76 @@ function renderPicker() {
 
 function selectFilter(name) {
   filter = name;                 // null or opening name
+  lineFilter = null;             // leaving the opening clears any single-line drill
   bag = [];
   lastKey = null;
   try { localStorage.setItem(FILTER_KEY, name || ''); } catch (e) {}
   pickerOpen = false;
   renderPicker();
+  renderLines();
   renderTicker();
+  newLine();
+}
+
+// ---------------------------------------------------------------------------
+// Per-line list — when one opening is selected, list each line as a clickable
+// item with its rolling last-5-tries accuracy, so weak lines can be targeted.
+// ---------------------------------------------------------------------------
+function formatLine(moves) {
+  let out = '';
+  for (let i = 0; i < moves.length; i++) {
+    out += (i % 2 === 0 ? (i / 2 + 1) + '.' : '') + moves[i] + ' ';
+  }
+  return out.trim();
+}
+
+function renderLines() {
+  if (!linesPanelEl) return;
+  linesPanelEl.innerHTML = '';
+  if (!filter) return;   // only shown when drilling a single opening
+  const lines = ALL_LINES.filter((l) => l.opening === filter);
+
+  const head = document.createElement('div');
+  head.className = 'lines-head';
+  head.textContent = 'Lines — last-5 accuracy · tap to drill one';
+  linesPanelEl.appendChild(head);
+
+  const allItem = document.createElement('button');
+  allItem.className = 'line-item all' + (lineFilter ? '' : ' active');
+  allItem.innerHTML = `<span class="line-txt">↻ Shuffle all ${lines.length} lines</span>`;
+  allItem.addEventListener('click', clearLineFilter);
+  linesPanelEl.appendChild(allItem);
+
+  lines.forEach((l) => {
+    const key = lineKey(l);
+    const acc = lineAccuracy(key);
+    const badgeCls = acc == null ? 'na' : acc.pct >= 80 ? 'good' : acc.pct >= 50 ? 'mid' : 'bad';
+    const badgeTxt = acc == null ? '—' : acc.pct + '%';
+    const item = document.createElement('button');
+    item.className = 'line-item' + (lineFilter === key ? ' active' : '');
+    item.title = acc ? `${acc.pct}% over last ${acc.count} tr${acc.count === 1 ? 'y' : 'ies'}` : 'not tried yet';
+    item.innerHTML =
+      `<span class="line-badge ${badgeCls}">${badgeTxt}</span>` +
+      `<span class="line-txt">${formatLine(l.moves)}</span>`;
+    item.addEventListener('click', () => selectLine(key));
+    linesPanelEl.appendChild(item);
+  });
+}
+
+function selectLine(key) {
+  lineFilter = key;
+  bag = [];
+  lastKey = null;
+  renderLines();
+  renderTicker();
+  newLine();
+}
+
+function clearLineFilter() {
+  lineFilter = null;
+  bag = [];
+  lastKey = null;
+  renderLines();
   newLine();
 }
 
@@ -782,6 +881,7 @@ document.addEventListener('touchmove', (e) => {
 // ---------------------------------------------------------------------------
 buildBoard();
 renderPicker();
+renderLines();
 renderTicker();
 renderOptsToggle();
 newLine();
@@ -800,6 +900,12 @@ window.__trainer = {
   get openings() { return OPENING_META.map((o) => ({ ...o })); },
   get filter() { return filter; },
   setFilter: selectFilter,
+  get lineFilter() { return lineFilter; },
+  selectLine, clearLineFilter,
+  get lineStats() { return JSON.parse(JSON.stringify(lineStats)); },
+  lineKey,
+  get activeCount() { return activeLines().length; },
+  resetLineStats() { lineStats = {}; saveLineStats(); renderLines(); },
   get stats() { return JSON.parse(JSON.stringify({ byOpening: stats.byOpening, session })); },
   get openingName() { return targetOpening; },
   get showOptions() { return showOptions; },
