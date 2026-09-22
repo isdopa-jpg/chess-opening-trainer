@@ -62,12 +62,14 @@ h1#title .side {
 
 .ticker {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: baseline;
-  gap: 14px;
+  gap: 4px 14px;
   font-size: 0.9rem;
   color: #9a9a9a;
   min-height: 1.1em;
+  text-align: center;
 }
 .ticker .tk-scope { color: #cfcfcf; }
 .ticker .tk-scope strong { color: var(--accent); font-weight: 700; }

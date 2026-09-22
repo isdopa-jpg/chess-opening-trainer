@@ -606,11 +606,7 @@ function hint() {
 let pickerOpen = false;
 
 function shortName(name) {
-  if (name.startsWith('QGA')) {
-    const paren = name.match(/\(([^)]+)\)/);
-    return paren ? 'QGA ' + paren[1] : name.replace(/:\s*/, ' ');
-  }
-  return name.split(':')[0].replace(/\s*\([^)]*\)/, '').replace(/\s*(Defense|Game)\b/, '').trim();
+  return name;   // names already match the study chapter titles exactly
 }
 
 function currentLabel() {
