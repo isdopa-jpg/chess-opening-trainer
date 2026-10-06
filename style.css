@@ -268,6 +268,45 @@ h1#title .side {
   color: #8a8a8a;
   margin: 12px 2px 6px;
 }
+.picker-group-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 12px 2px 4px;
+}
+.picker-group-row .picker-group { margin: 0; }
+.group-toggle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.group-toggle:active { opacity: 0.6; }
+
+/* checkbox list of openings */
+.check-list { display: flex; flex-direction: column; gap: 3px; }
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #302f2c;
+  cursor: pointer;
+}
+.check-row.on { background: #2c3220; }
+.check-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.check-name { font-size: 0.92rem; color: #d6d6d6; }
+.check-row.on .check-name { color: #fff; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 7px; }
 .chip {
   padding: 7px 12px;

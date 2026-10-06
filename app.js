@@ -130,13 +130,27 @@ const OPENING_META = (() => {
   return [...map.values()];
 })();
 
-const FILTER_KEY = 'trainer.filter.v1';
-let filter = (() => {           // null = practice all openings
+// Which openings are checked for practice. Empty set = practice ALL openings;
+// otherwise the drill mixes every checked opening together.
+const SELECTED_KEY = 'trainer.selected.v1';
+let selectedOps = (() => {
   try {
-    const f = localStorage.getItem(FILTER_KEY);
-    return f && OPENING_META.some((o) => o.name === f) ? f : null;
-  } catch (e) { return null; }
+    const raw = JSON.parse(localStorage.getItem(SELECTED_KEY));
+    if (Array.isArray(raw)) return new Set(raw.filter((n) => OPENING_META.some((o) => o.name === n)));
+  } catch (e) {}
+  // one-time migration from the old single-opening filter
+  try {
+    const old = localStorage.getItem('trainer.filter.v1');
+    if (old && OPENING_META.some((o) => o.name === old)) return new Set([old]);
+  } catch (e) {}
+  return new Set();
 })();
+function saveSelected() { try { localStorage.setItem(SELECTED_KEY, JSON.stringify([...selectedOps])); } catch (e) {} }
+function selectedLineCount() {
+  let c = 0;
+  for (const o of OPENING_META) if (selectedOps.has(o.name)) c += o.count;
+  return c;
+}
 // A stable, unique key for one repertoire line (opening-qualified so lines that
 // share a move sequence across sides/openings never collide).
 function lineKey(line) { return line.opening + '||' + line.moves.join(' '); }
@@ -144,9 +158,8 @@ function lineKey(line) { return line.opening + '||' + line.moves.join(' '); }
 // When set, drill just this one line (its lineKey); otherwise the active filter.
 let lineFilter = null;
 function activeLines() {
-  let ls = filter ? ALL_LINES.filter((l) => l.opening === filter) : ALL_LINES;
-  if (lineFilter) ls = ls.filter((l) => lineKey(l) === lineFilter);
-  return ls;
+  if (lineFilter) return ALL_LINES.filter((l) => lineKey(l) === lineFilter);
+  return selectedOps.size ? ALL_LINES.filter((l) => selectedOps.has(l.opening)) : ALL_LINES;
 }
 
 // Rolling last-5 outcome per line (1 = clean first try, 0 = had a wrong move),
@@ -433,8 +446,14 @@ function scoreDecision(correct) {
 }
 function renderTicker() {
   if (!tickerEl) return;
-  const scoped = filter ? (stats.byOpening[filter] || { correct: 0, wrong: 0 }) : overallStats();
-  const label = filter ? shortName(filter) : 'Overall';
+  let scoped, label;
+  if (selectedOps.size === 0) { scoped = overallStats(); label = 'Overall'; }
+  else if (selectedOps.size === 1) { const n = [...selectedOps][0]; scoped = stats.byOpening[n] || { correct: 0, wrong: 0 }; label = shortName(n); }
+  else {
+    scoped = { correct: 0, wrong: 0 };
+    for (const n of selectedOps) { const o = stats.byOpening[n]; if (o) { scoped.correct += o.correct; scoped.wrong += o.wrong; } }
+    label = selectedOps.size + ' openings';
+  }
   const a = pct(scoped), sa = pct(session);
   const tot = scoped.correct + scoped.wrong;
   tickerEl.innerHTML =
@@ -645,9 +664,12 @@ function shortName(name) {
 }
 
 function currentLabel() {
-  if (!filter) return `All openings (${ALL_LINES.length})`;
-  const m = OPENING_META.find((o) => o.name === filter);
-  return m ? `${shortName(m.name)} (${m.count})` : filter;
+  if (selectedOps.size === 0) return `All openings (${ALL_LINES.length})`;
+  if (selectedOps.size === 1) {
+    const m = OPENING_META.find((o) => o.name === [...selectedOps][0]);
+    return m ? `${shortName(m.name)} (${m.count})` : [...selectedOps][0];
+  }
+  return `${selectedOps.size} openings (${selectedLineCount()})`;
 }
 
 function chip(label, title, active, onClick) {
@@ -671,39 +693,79 @@ function renderPicker() {
 
   const panel = document.createElement('div');
   panel.className = 'picker-panel';
+
+  // "All openings" — clears every check (empty selection = practice everything)
   const allRow = document.createElement('div');
   allRow.className = 'chip-row';
-  allRow.appendChild(chip(`All (${ALL_LINES.length})`, 'Practice every opening', !filter, () => selectFilter(null)));
+  allRow.appendChild(chip(`All openings (${ALL_LINES.length})`, 'Practice every opening', selectedOps.size === 0, practiceAll));
   panel.appendChild(allRow);
 
   for (const side of ['white', 'black']) {
     const metas = OPENING_META.filter((o) => o.side === side);
     if (!metas.length) continue;
-    const lbl = document.createElement('div');
+
+    const grp = document.createElement('div');
+    grp.className = 'picker-group-row';
+    const lbl = document.createElement('span');
     lbl.className = 'picker-group';
     lbl.textContent = side === 'white' ? 'You play White' : 'You play Black';
-    panel.appendChild(lbl);
-    const row = document.createElement('div');
-    row.className = 'chip-row';
+    grp.appendChild(lbl);
+    const allIn = metas.every((m) => selectedOps.has(m.name));
+    const toggle = document.createElement('button');
+    toggle.className = 'group-toggle';
+    toggle.textContent = allIn ? 'Clear' : 'Select all';
+    toggle.addEventListener('click', () => {
+      metas.forEach((m) => allIn ? selectedOps.delete(m.name) : selectedOps.add(m.name));
+      applySelectionChange();
+    });
+    grp.appendChild(toggle);
+    panel.appendChild(grp);
+
+    const list = document.createElement('div');
+    list.className = 'check-list';
     for (const m of metas) {
-      row.appendChild(chip(`${shortName(m.name)} (${m.count})`, m.name, filter === m.name, () => selectFilter(m.name)));
+      const row = document.createElement('label');
+      row.className = 'check-row' + (selectedOps.has(m.name) ? ' on' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selectedOps.has(m.name);
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedOps.add(m.name); else selectedOps.delete(m.name);
+        applySelectionChange();
+      });
+      const txt = document.createElement('span');
+      txt.className = 'check-name';
+      txt.textContent = `${shortName(m.name)} (${m.count})`;
+      row.appendChild(cb);
+      row.appendChild(txt);
+      list.appendChild(row);
     }
-    panel.appendChild(row);
+    panel.appendChild(list);
   }
   pickerEl.appendChild(panel);
 }
 
-function selectFilter(name) {
-  filter = name;                 // null or opening name
-  lineFilter = null;             // leaving the opening clears any single-line drill
+// Apply a change to the checked-openings set: reset the drill and refresh UI.
+function applySelectionChange() {
+  lineFilter = null;             // changing the mix clears any single-line drill
   bag = [];
   lastKey = null;
-  try { localStorage.setItem(FILTER_KEY, name || ''); } catch (e) {}
-  pickerOpen = false;
-  renderPicker();
+  saveSelected();
+  renderPicker();                // keeps the panel open, updates checks + label
   renderLines();
   renderTicker();
   newLine();
+}
+
+function practiceAll() {
+  selectedOps.clear();
+  applySelectionChange();
+}
+
+// Drill exactly one opening (used by tests / programmatic callers).
+function selectFilter(name) {
+  selectedOps = new Set(name ? [name] : []);
+  applySelectionChange();
 }
 
 // ---------------------------------------------------------------------------
@@ -721,8 +783,9 @@ function formatLine(moves) {
 function renderLines() {
   if (!linesPanelEl) return;
   linesPanelEl.innerHTML = '';
-  if (!filter) return;   // only shown when drilling a single opening
-  const lines = ALL_LINES.filter((l) => l.opening === filter);
+  if (selectedOps.size !== 1) return;   // only shown when drilling a single opening
+  const only = [...selectedOps][0];
+  const lines = ALL_LINES.filter((l) => l.opening === only);
 
   const head = document.createElement('div');
   head.className = 'lines-head';
@@ -898,8 +961,11 @@ window.__trainer = {
   get lineCount() { return ALL_LINES.length; },
   get sides() { const s = { white: 0, black: 0 }; ALL_LINES.forEach((l) => s[l.side]++); return s; },
   get openings() { return OPENING_META.map((o) => ({ ...o })); },
-  get filter() { return filter; },
+  get filter() { return selectedOps.size === 1 ? [...selectedOps][0] : null; },
+  get selected() { return [...selectedOps]; },
   setFilter: selectFilter,
+  setSelected(names) { selectedOps = new Set(names || []); applySelectionChange(); },
+  practiceAll,
   get lineFilter() { return lineFilter; },
   selectLine, clearLineFilter,
   get lineStats() { return JSON.parse(JSON.stringify(lineStats)); },
