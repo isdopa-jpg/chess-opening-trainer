@@ -30,7 +30,7 @@ function tokenizePgn(text) {
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
-    if (ch === '{') { const e = text.indexOf('}', i); i = e === -1 ? text.length : e + 1; continue; }
+    if (ch === '{') { const e = text.indexOf('}', i); tokens.push({ comment: text.slice(i + 1, e === -1 ? text.length : e) }); i = e === -1 ? text.length : e + 1; continue; }
     if (ch === ';') { const e = text.indexOf('\n', i); i = e === -1 ? text.length : e + 1; continue; }
     if (ch === '(' || ch === ')') { tokens.push(ch); i++; continue; }
     if (/\s/.test(ch)) { i++; continue; }
@@ -44,6 +44,22 @@ function tokenizePgn(text) {
 
 const PGN_SKIP = /^(\*|1-0|0-1|1\/2-1\/2|\d+\.+|\$\d+)$/;
 
+// Pull a named-variation label out of a PGN comment, or null if the comment is
+// just an annotation / transposition note / game reference. Named variations
+// end in a known word (Variation, Gambit, …) or are a single proper noun (KIA,
+// Benoni); these get split out into their own openings.
+function variationName(text) {
+  const s = (text || '').trim();
+  if (!s) return null;
+  if (/transpos|prelazi/i.test(s)) return null;   // "It transposes…", "Prelazi…"
+  if (/[0-9()\[\]]/.test(s)) return null;          // game refs, move hints, %tags
+  if (/\.\.\./.test(s) || s.includes('%')) return null;
+  if (s.split(/\s+/).length > 4) return null;
+  if (/(Variation|Gambit|Defense|Defence|Attack|System|Opening|Game)$/.test(s)) return s;
+  if (/^[A-Z][A-Za-z-]+$/.test(s)) return s;       // single proper noun: KIA, Benoni
+  return null;
+}
+
 // A variation "( … )" is an alternative to the move that just preceded it, so
 // it branches from the position *before* that move. We track each node's
 // fen-before-move and rewind to it when entering a variation.
@@ -55,6 +71,10 @@ function pgnToTree(pgn, name) {
   let node = root, prev = null;
   const stack = [];
   for (const tk of tokens) {
+    if (typeof tk === 'object') {           // comment: label the move it follows
+      if (prev && !prev.label) { const nm = variationName(tk.comment); if (nm) prev.label = nm; }
+      continue;
+    }
     if (tk === '(') {
       stack.push({ game, node, prev });
       if (prev) { game = new Chess(prev.fenBefore); node = prev.parent; prev = null; }
@@ -96,9 +116,38 @@ function buildAll(openings) {
       for (const variation of (op.variations || [])) insertVariation(opRoot, variation);
     }
     mergeChildren(root.children, opRoot.children);
-    for (const moves of enumerateLines(opRoot)) lines.push({ moves, side, opening: op.name });
+
+    // Split named sub-variations into their own openings. A line's opening is the
+    // DEEPEST named label on its path — unless that label spans the whole chapter
+    // (e.g. Caro-Kann's "Exchange Variation"), in which case it stays the chapter.
+    const paths = enumerateNodePaths(opRoot);
+    const total = paths.length;
+    const labelCount = {};
+    for (const p of paths) {
+      for (const L of new Set(p.filter((n) => n.label).map((n) => n.label))) {
+        labelCount[L] = (labelCount[L] || 0) + 1;
+      }
+    }
+    for (const p of paths) {
+      let opening = op.name;
+      for (let k = p.length - 1; k >= 0; k--) {
+        const L = p[k].label;
+        if (L && labelCount[L] < total) { opening = L; break; }   // genuine sub-line
+      }
+      lines.push({ moves: p.map((n) => n.san), side, opening });
+    }
   }
   return { root, lines };
+}
+
+// Enumerate complete lines as arrays of NODES (so labels on the path are visible).
+function enumerateNodePaths(root) {
+  const out = [];
+  (function dfs(n, path) {
+    if (n.children.length === 0) { if (path.length) out.push(path); return; }
+    for (const c of n.children) dfs(c, path.concat(c));
+  })(root, []);
+  return out;
 }
 
 const _built = buildAll(OPENINGS);
